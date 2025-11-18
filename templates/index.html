@@ -1,0 +1,187 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>CARE - Respiratory Disease Prediction</title>
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
+  <style>
+    body {
+      font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+      margin: 0;
+      padding: 0;
+      height: 100vh;
+      background: linear-gradient(135deg, #6dd5ed, #2193b0);
+      display: flex;
+      justify-content: center;
+      align-items: center;
+    }
+
+    .container {
+      background: #ffffff;
+      padding: 30px 25px;
+      border-radius: 15px;
+      box-shadow: 0 6px 15px rgba(0,0,0,0.2);
+      text-align: center;
+      width: 420px;
+      animation: fadeIn 1s ease;
+    }
+
+    @keyframes fadeIn {
+      from { opacity: 0; transform: scale(0.9); }
+      to { opacity: 1; transform: scale(1); }
+    }
+
+    h1 {
+      color: #333;
+      margin-bottom: 15px;
+    }
+
+    .icon {
+      font-size: 50px;
+      margin: 15px 0;
+      color: #28a745;
+    }
+
+    input[type="file"] {
+      margin: 15px 0;
+    }
+
+    button {
+      background: #007bff;
+      color: white;
+      border: none;
+      padding: 12px 18px;
+      font-size: 16px;
+      border-radius: 8px;
+      cursor: pointer;
+      transition: 0.3s;
+    }
+
+    button:hover {
+      background: #0056b3;
+    }
+
+    .result-card {
+      margin-top: 20px;
+      text-align: left;
+      background: #f8f9fa;
+      border-radius: 10px;
+      padding: 15px;
+      box-shadow: inset 0 2px 5px rgba(0,0,0,0.1);
+    }
+
+    .success {
+      font-size: 18px;
+      color: #28a745;
+      font-weight: bold;
+    }
+
+    .error {
+      color: red;
+      font-weight: bold;
+      margin-top: 10px;
+    }
+
+    .prob-table {
+      width: 100%;
+      margin-top: 10px;
+      border-collapse: collapse;
+    }
+
+    .prob-table th, .prob-table td {
+      border: 1px solid #ddd;
+      padding: 8px;
+      text-align: center;
+    }
+
+    .prob-table th {
+      background: #007bff;
+      color: white;
+    }
+
+    .spinner {
+      display: none;
+      margin: 20px auto;
+      border: 4px solid #f3f3f3;
+      border-top: 4px solid #007bff;
+      border-radius: 50%;
+      width: 30px;
+      height: 30px;
+      animation: spin 1s linear infinite;
+    }
+
+    @keyframes spin {
+      0% { transform: rotate(0deg); }
+      100% { transform: rotate(360deg); }
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <img src="https://img.icons8.com/external-flatart-icons-flat-flatarticons/64/000000/external-lungs-anatomy-flatart-icons-flat-flatarticons.png" alt="Logo" style="width:100px; margin-bottom:10px;">
+    <h1>CARE</h1>
+    <p style="color:#555; margin-top:-10px;">Computer Assisted Respiratory Expert</p>
+    <i class="fa-solid fa-stethoscope icon"></i>
+
+    <form id="uploadForm" method="POST" enctype="multipart/form-data" action="/predict">
+      <label for="file"><strong>Upload Your Audio File:</strong></label>
+      <input type="file" id="file" name="file" accept=".wav" required>
+      <br>
+      <button type="submit">Predict</button>
+    </form>
+
+    <div class="spinner" id="spinner"></div>
+    <div id="message"></div>
+  </div>
+
+  <script>
+    const form = document.getElementById('uploadForm');
+    const messageDiv = document.getElementById('message');
+    const spinner = document.getElementById('spinner');
+
+    form.addEventListener('submit', async (e) => {
+      e.preventDefault();
+      const formData = new FormData(form);
+
+      spinner.style.display = 'block';
+      messageDiv.innerHTML = '';
+
+      try {
+        const response = await fetch('/predict', {
+          method: 'POST',
+          body: formData
+        });
+
+        const result = await response.json();
+        spinner.style.display = 'none';
+
+        if (response.ok) {
+          let tableHTML = `
+            <table class="prob-table">
+              <tr><th>Disease</th><th>Probability</th></tr>
+          `;
+
+          for (const [cls, prob] of Object.entries(result.all_probabilities)) {
+            tableHTML += `<tr><td>${cls}</td><td>${prob}</td></tr>`;
+          }
+          tableHTML += `</table>`;
+
+          messageDiv.innerHTML = `
+            <div class="result-card">
+              <p class="success">Prediction: ${result.prediction}</p>
+              <p><strong>Confidence:</strong> ${result.confidence}</p>
+              ${tableHTML}
+            </div>
+          `;
+        } else {
+          messageDiv.innerHTML = `<p class="error">${result.error}</p>`;
+        }
+      } catch (error) {
+        spinner.style.display = 'none';
+        messageDiv.innerHTML = `<p class="error">An error occurred. Please try again later.</p>`;
+      }
+    });
+  </script>
+</body>
+</html>

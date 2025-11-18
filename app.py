@@ -13,12 +13,13 @@ base_dir = os.path.abspath(os.path.dirname(__file__))
 app = Flask(__name__)
 CORS(app)
 
+# --- CORRECTED PATH ---
 # Configure upload folder relative to the script's location
 UPLOAD_FOLDER = os.path.join(base_dir, 'static', 'uploads')
 os.makedirs(UPLOAD_FOLDER, exist_ok=True)
 app.config['UPLOAD_FOLDER'] = UPLOAD_FOLDER
 
-# --- THIS IS THE CORRECTED PATH ---
+# --- CORRECTED PATH ---
 # Load pre-trained model relative to the script's location
 MODEL_PATH = os.path.join(base_dir, 'precare.keras')
 model = tf.keras.models.load_model(MODEL_PATH)
@@ -26,6 +27,7 @@ model = tf.keras.models.load_model(MODEL_PATH)
 # Class names (must match training order!)
 classes = ['COPD', 'Bronchiolitis', 'Pneumonia', 'URTI', 'Healthy']
 
+# --- ADDED PRECAUTIONS ---
 precautions_data = {
     "COPD": "Avoid smoking, avoid pollution, continue prescribed inhalers.",
     "Bronchiolitis": "Rest, hydration, use humidifier, seek care if worsening.",
@@ -46,8 +48,6 @@ def allowed_file(filename):
 
 def extract_features(file_path, n_mfcc=64):
     """Extract MFCC features in same shape as training."""
-    # [cite_start]Your model's config.json shows it expects (None, 64, 1) [cite: 1988, 1990]
-    # This function correctly returns that shape.
     audio, sr = librosa.load(file_path, sr=22050, res_type='kaiser_fast')
     mfcc = np.mean(librosa.feature.mfcc(y=audio, sr=sr, n_mfcc=n_mfcc).T, axis=0)
     return mfcc.reshape(1, n_mfcc, 1)  # (1, 64, 1)
@@ -64,47 +64,52 @@ def predict():
         return jsonify({'error': 'No file part in the request.'}), 400
 
     file = request.files['file']
-
     if file.filename == '':
-        return jsonify({'error': 'No file selected.'}), 400
+        return jsonify({'error': 'No file selected for upload.'}), 400
 
     if not allowed_file(file.filename):
-        return jsonify({'error': 'Please upload a .wav file only.'}), 400
+        return jsonify({'error': 'Invalid file type. Please upload a .wav file.'}), 400
 
+    # Save the uploaded file
     file_path = os.path.join(app.config['UPLOAD_FOLDER'], file.filename)
-
+    
     try:
         file.save(file_path)
 
+        # Extract features & predict
         features = extract_features(file_path)
-        prediction = model.predict(features)[0]
-
+        prediction = model.predict(features)[0]  # shape (5,)
         class_index = np.argmax(prediction)
         predicted_class = classes[class_index]
-        confidence = float(prediction[class_index]) * 100
+        confidence = float(prediction[class_index]) * 100  # percentage
 
+        # --- ADDED PRECAUTIONS ---
         precautions = precautions_data.get(predicted_class, "No precautions available.")
 
         return jsonify({
             'prediction': predicted_class,
             'confidence': f"{confidence:.2f}%",
-            'precautions': precautions,
+            'precautions': precautions, # --- ADDED PRECAUTIONS ---
             'all_probabilities': {
-                classes[i]: f"{float(prediction[i]) * 100:.2f}%" 
-                for i in range(len(classes))
+                classes[i]: f"{float(prediction[i])*100:.2f}%" for i in range(len(classes))
             }
         })
 
     except Exception as e:
-        logger.error(f"Prediction error: {str(e)}")
-        return jsonify({'error': 'Internal server error.', 'details': str(e)}), 500
+        logger.error(f"Error during prediction: {str(e)}")
+        return jsonify({'error': 'An internal error occurred.', 'details': str(e)}), 500
     
     finally:
-        # --- ADDED THIS FIX AGAIN ---
-        # This ensures the uploaded file is deleted to prevent disk quota errors.
+        # --- ADDED FILE DELETION ---
+        # This block runs no matter what, ensuring the file is deleted
+        # This prevents your app from running out of disk space
         if os.path.exists(file_path):
             try:
                 os.remove(file_path)
                 logger.info(f"Successfully removed uploaded file: {file_path}")
             except Exception as e:
                 logger.error(f"Error removing file {file_path}: {str(e)}")
+
+# --- COMMENTED OUT FOR RENDER ---
+# if __name__ == '__main__':
+#     app.run(debug=True, port=5001)

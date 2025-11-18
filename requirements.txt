@@ -1,0 +1,6 @@
+flask
+numpy
+librosa
+tensorflow
+flask_cors
+gunicorn
